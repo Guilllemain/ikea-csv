@@ -2,7 +2,8 @@ const express = require('express')
 const app = express()
 const axios = require('axios')
 const cheerio = require('cheerio')
-const products = require('./urls');
+const fs = require('fs')
+const productsUrl = require('./urls')
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = createCsvWriter({
     path: 'ikea.csv',
@@ -24,13 +25,17 @@ const csvWriter = createCsvWriter({
 
 const data = [];
 
-let productsUrl;
+let count = 1;
+let categoryCount = 1;
+
 
 app.get('/', function (req, res) {
     // get products urls from xml sitemap
     const mainUrl = "https://www.ikea.com/domainwide-sitemaps/cat-en_AE_1.xml";
+    const mainProductUrl1 = "https://www.ikea.com/domainwide-sitemaps/prod-en_AE_1.xml"
+    const mainProductUrl2 = "https://www.ikea.com/domainwide-sitemaps/prod-en_AE_2.xml"
+    const mainProductUrl3 = "https://www.ikea.com/domainwide-sitemaps/prod-en_AE_3.xml"
     
-
     const getData = async url => {
         try {
             const response = await axios.get(url);
@@ -39,12 +44,17 @@ app.get('/', function (req, res) {
             $('loc').each(function (i, e) {
                 categoriesUrl[i] = $(this).text();
             });
-            categoriesUrl.forEach(url => getProductPage(url))
+            // categoriesUrl.forEach(url => getProductPage(url))
+            fs.writeFile('urls3.txt', categoriesUrl, (err) => {
+                if (err) console.log(err);
+                console.log(categoriesUrl)
+                console.log("Successfully Written to File.");
+            })
         } catch (error) {
             console.log(error);
         }
     };
-    getData(mainUrl);
+    getData(mainProductUrl3);
     
     const getProductPage = async categoryUrl => {
         try {
@@ -60,9 +70,10 @@ app.get('/', function (req, res) {
             } else {
                 const u = urls.filter(el => !el.includes('openPopup'))
                 productsUrl = [...new Set(u)];
+                console.log(`category ${categoryCount++} added`)
             }
         } catch (error) {
-            // console.log(error);
+            console.log(error);
         }
     };
 })
@@ -72,13 +83,30 @@ app.get('/products', (req, res) => {
 })
 
 app.get('/file', (req, res) => {
-    // productsUrl.forEach(url => getProductInfo(url))
-    getProductInfo(products[0])
+        let index = 0;
+            setInterval(() => {
+                if (index < 10000) {
+                    getProductInfo(productsUrl[index])
+                    index++;
+                } else if (index === 10000) {
+                    index++
+                    csvWriter
+                        .writeRecords(data)
+                        .then(() => console.log('The CSV file was written successfully'));
+                }
+            }, 500);
+    // getProductInfo(productsUrl[0])
+})
+
+app.get('/write', (req, res) => {
+        csvWriter
+            .writeRecords(data)
+            .then(() => console.log('The CSV file was written successfully'));
 })
 
 const getProductInfo = async url => {
     try {
-        const response = await axios.get('https://www.ikea.com/ae/en/p/hamarvik-sprung-mattress-medium-firm-dark-beige-50244388/');
+        const response = await axios.get(url);
         const $ = cheerio.load(response.data);
         const category = $('.range-breadcrumb__list-item span').first().text();
         const title = $('.range-breadcrumb__list-item--active a span').text();
@@ -89,17 +117,22 @@ const getProductInfo = async url => {
             rawDescription[i] = $(this).text()
         })
         const description = rawDescription.join(' ')
-        const dimensions = []
+        let dimensions = []
+        let rawDimensions = []
         $('.product-pip__definition-list-item-container').each(function(i, e) {
-            dimensions[i] = $(this).children().text()
+            $(this).children().each(function(j, el) {
+                rawDimensions.push($(this).text().replace(/:.*$/g, ''))
+            })
+            dimensions.push(rawDimensions.join(':'))
+            rawDimensions = []
         })
+        dimensions = dimensions.join(' ')
         const mainImage = $('.range-carousel__image img').first().attr('src')
         const rawImages = []
         $('.range-carousel__image img').each(function (i, e) {
             rawImages[i] = $(this).attr('src')
         })
-        const additionalImages = rawImages.slice(1).join("\n")
-        console.log(additionalImages)
+        const additionalImages = rawImages.slice(1).join(" ")
         const packagesNumber = $('#pip_package_details h5').length
         const packagesDetails = []
         let details = []
@@ -107,27 +140,30 @@ const getProductInfo = async url => {
             $(this).children().each(function (j, e) {
                 details.push($(this).text())
             })
+            details = [details.join(' ')]
             $(this).next().each(function (i, e) {
                 $(this).children().each(function (i, e) {
                     details.push($(this).text().trim().replace('\n', '').replace(/ /g, '').replace(':', ': '))
                 })
             })
+            details = [details.join(' ')]
             packagesDetails.push(details)
             details = []
         })
-        const variations = []
+        let variations = []
         let variationsDesc = []
         let variationsDetails = []
         $('.product-pip__criterias__criteria').each(function(i, e) {
-            variationsDesc.push($(this).data('criteria-name'))
+            variationsDesc.push($(this).data('criteria-name') + ':')
             $(this).find('.product-variation__label').each(function(i, e) {
                 variationsDetails.push($(this).text().trim())
             })
-            variationsDesc.push(variationsDetails)
-            variations.push(variationsDesc)
+            variationsDesc.push(variationsDetails.join('|'))
+            variations.push(variationsDesc.join(''))
             variationsDesc = []
             variationsDetails = []
         })
+        variations = variations.join(' ')
 
         data.push({
             url,
@@ -143,11 +179,9 @@ const getProductInfo = async url => {
             packagesDetails,
             variations,
         })
-        csvWriter
-            .writeRecords(data)
-            .then(() => console.log('The CSV file was written successfully'));
+        console.log(`product ${count++} was pushed - ${id}`)
     } catch (error) {
         console.log(error);
     }
 }
-app.listen(3000, () => console.log('server running'))
+app.listen(8050, () => console.log('server running'))
