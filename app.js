@@ -3,7 +3,7 @@ const app = express()
 const axios = require('axios')
 const cheerio = require('cheerio')
 const fs = require('fs')
-const productsUrl = require('./urls')
+const productsUrl = require('./urls2')
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = createCsvWriter({
     path: 'ikea.csv',
@@ -79,30 +79,23 @@ app.get('/', function (req, res) {
 })
 
 app.get('/products', (req, res) => {
-    res.write(productsUrl);
+    console.log(productsUrl.length)
 })
 
-app.get('/file', (req, res) => {
-        let index = 0;
-            setInterval(() => {
-                if (index < 10000) {
-                    getProductInfo(productsUrl[index])
-                    index++;
-                } else if (index === 10000) {
-                    index++
-                    csvWriter
-                        .writeRecords(data)
-                        .then(() => console.log('The CSV file was written successfully'));
-                }
-            }, 500);
-    // getProductInfo(productsUrl[0])
-})
-
-app.get('/write', (req, res) => {
-        csvWriter
-            .writeRecords(data)
-            .then(() => console.log('The CSV file was written successfully'));
-})
+// app.get('/file', (req, res) => {
+//         let index = 0;
+//             setInterval(() => {
+//                 if (index < 10000) {
+//                     getProductInfo(productsUrl[index])
+//                     index++;
+//                 } else if (index === 10000) {
+//                     index++
+//                     csvWriter
+//                         .writeRecords(data)
+//                         .then(() => console.log('The CSV file was written successfully'));
+//                 }
+//             }, 100);
+// })
 
 const getProductInfo = async url => {
     try {
